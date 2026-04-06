@@ -23,12 +23,44 @@ LiveCollab is a collaborative online whiteboard built with Express and WebSocket
 
 ## Run
 
+### macOS / Linux
+
 ```bash
 npm install
 npm start
 ```
 
 Open `http://localhost:3000`.
+
+### Windows
+
+1. Install Node.js 18+ from the official installer.
+2. Open `Command Prompt` or `PowerShell`.
+3. Go to the project folder.
+
+```powershell
+cd path\to\Real-2-Sim
+```
+
+4. Install dependencies.
+
+```powershell
+npm install
+```
+
+5. Start the app.
+
+```powershell
+npm start
+```
+
+6. Open `http://localhost:3000` in your browser.
+
+If PowerShell blocks npm scripts, run this once in a PowerShell window:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
 
 ## Session Flow
 

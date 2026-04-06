@@ -41,8 +41,15 @@
       <section id="workspace" class="workspace hidden">
         <aside class="sidebar">
           <div class="card">
-            <p class="eyebrow">Session</p>
-            <h2 id="sessionTitle">Whiteboard</h2>
+            <div class="session-topbar">
+              <div>
+                <p class="eyebrow">Session</p>
+                <h2 id="sessionTitle">Whiteboard</h2>
+              </div>
+              <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" title="Toggle dark mode">
+                <span id="themeToggleIcon">◐</span>
+              </button>
+            </div>
             <p class="meta">Room ID: <span id="sessionIdText">-</span></p>
             <label class="share-link">
               Shareable join link
@@ -70,17 +77,26 @@
           </div>
           <canvas id="board"></canvas>
           <section class="tool-dock">
-            <div class="dock-group">
+            <div class="dock-group dock-tools">
               <p class="eyebrow">Tools</p>
               <div class="toolbar" id="toolButtons"></div>
             </div>
             <div class="dock-group dock-settings">
-              <label>Stroke color <input id="colorInput" type="color" value="#0f172a" /></label>
-              <label>Stroke width <input id="widthInput" type="range" min="1" max="12" value="3" /></label>
-              <label class="toggle">
-                <input id="shapeAssist" type="checkbox" checked />
-                <span>Shape detection</span>
-              </label>
+              <section class="control-card">
+                <p class="control-label">Stroke color</p>
+                <div id="colorPalette" class="swatch-grid"></div>
+              </section>
+              <section class="control-card">
+                <p class="control-label">Stroke width</p>
+                <div id="widthButtons" class="width-grid"></div>
+              </section>
+              <section class="control-card">
+                <p class="control-label">Assist</p>
+                <button id="shapeAssistToggle" class="toggle-button active" type="button" aria-pressed="true">
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                  <span>Shape detection</span>
+                </button>
+              </section>
             </div>
             <div class="actions dock-actions">
               <button id="undoBtn" type="button">Undo last</button>

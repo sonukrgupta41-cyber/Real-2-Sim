@@ -5,6 +5,10 @@
     session: null,
     currentMember: null,
     currentTool: "pen",
+    currentColor: "#0f172a",
+    currentWidth: 3,
+    shapeAssistEnabled: true,
+    theme: localStorage.getItem("livecollab-theme") || "light",
     boardItems: [],
     draftPoints: [],
     drawing: false,
@@ -20,6 +24,8 @@
     { id: "arrow", icon: "➜", label: "Arrow" },
     { id: "eraser", icon: "⌫", label: "Eraser" }
   ];
+  const colors = ["#0f172a", "#cb4b16", "#236a4b", "#2563eb", "#be123c", "#7c3aed", "#111827", "#ffffff"];
+  const widths = [2, 3, 5, 8, 12];
   const appEls = {
     authPanel: document.getElementById("authPanel"),
     authStatus: document.getElementById("authStatus"),
@@ -27,9 +33,9 @@
     createForm: document.getElementById("createForm"),
     joinForm: document.getElementById("joinForm"),
     toolButtons: document.getElementById("toolButtons"),
-    colorInput: document.getElementById("colorInput"),
-    widthInput: document.getElementById("widthInput"),
-    shapeAssist: document.getElementById("shapeAssist"),
+    colorPalette: document.getElementById("colorPalette"),
+    widthButtons: document.getElementById("widthButtons"),
+    shapeAssistToggle: document.getElementById("shapeAssistToggle"),
     clearBtn: document.getElementById("clearBtn"),
     undoBtn: document.getElementById("undoBtn"),
     membersList: document.getElementById("membersList"),
@@ -38,6 +44,8 @@
     sessionIdText: document.getElementById("sessionIdText"),
     shareLinkInput: document.getElementById("shareLinkInput"),
     copyLinkBtn: document.getElementById("copyLinkBtn"),
+    themeToggle: document.getElementById("themeToggle"),
+    themeToggleIcon: document.getElementById("themeToggleIcon"),
     currentRole: document.getElementById("currentRole"),
     statusBar: document.getElementById("statusBar"),
     canvas: document.getElementById("board")
@@ -128,6 +136,63 @@
       });
       appEls.toolButtons.appendChild(button);
     });
+  }
+
+  function buildColorPalette() {
+    appEls.colorPalette.innerHTML = "";
+    colors.forEach((color) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = color === state.currentColor ? "swatch active" : "swatch";
+      button.style.setProperty("--swatch-color", color);
+      button.setAttribute("aria-label", `Select color ${color}`);
+      button.title = color;
+      button.addEventListener("click", () => {
+        state.currentColor = color;
+        buildColorPalette();
+      });
+      appEls.colorPalette.appendChild(button);
+    });
+  }
+
+  function buildWidthButtons() {
+    appEls.widthButtons.innerHTML = "";
+    widths.forEach((width) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = width === state.currentWidth ? "width-chip active" : "width-chip";
+      button.title = `Stroke width ${width}`;
+      button.setAttribute("aria-label", `Stroke width ${width}`);
+
+      const line = document.createElement("span");
+      line.style.width = "22px";
+      line.style.height = `${width}px`;
+      button.appendChild(line);
+
+      const label = document.createElement("strong");
+      label.textContent = String(width);
+      button.appendChild(label);
+
+      button.addEventListener("click", () => {
+        state.currentWidth = width;
+        buildWidthButtons();
+      });
+      appEls.widthButtons.appendChild(button);
+    });
+  }
+
+  function syncShapeAssistToggle() {
+    appEls.shapeAssistToggle.classList.toggle("active", state.shapeAssistEnabled);
+    appEls.shapeAssistToggle.setAttribute("aria-pressed", String(state.shapeAssistEnabled));
+  }
+
+  function syncTheme() {
+    document.body.setAttribute("data-theme", state.theme);
+    appEls.themeToggle.setAttribute("aria-pressed", String(state.theme === "dark"));
+    appEls.themeToggle.title = state.theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+    appEls.themeToggleIcon.textContent = state.theme === "dark" ? "☀" : "◐";
+    localStorage.setItem("livecollab-theme", state.theme);
+    render();
   }
 
   function buildShareLink(sessionId) {
@@ -322,8 +387,8 @@
   }
 
   function buildDraftItem() {
-    const color = appEls.colorInput.value;
-    const width = Number(appEls.widthInput.value);
+    const color = state.currentColor;
+    const width = Number(state.currentWidth);
     const start = state.draftPoints[0];
     const end = state.draftPoints[state.draftPoints.length - 1];
 
@@ -344,7 +409,7 @@
     const draftItem = buildDraftItem();
     let finalItem = draftItem;
 
-    if (state.currentTool === "pen" && appEls.shapeAssist.checked) {
+    if (state.currentTool === "pen" && state.shapeAssistEnabled) {
       const detected = detectShape(state.draftPoints);
       if (detected) {
         finalItem = {
@@ -650,8 +715,22 @@
     setStatus("Room link loaded. Enter your name and password to join.");
   })();
 
+  appEls.shapeAssistToggle.addEventListener("click", () => {
+    state.shapeAssistEnabled = !state.shapeAssistEnabled;
+    syncShapeAssistToggle();
+  });
+
+  appEls.themeToggle.addEventListener("click", () => {
+    state.theme = state.theme === "dark" ? "light" : "dark";
+    syncTheme();
+  });
+
   window.addEventListener("resize", resizeCanvas);
 
+  syncTheme();
   resetToolButtons();
+  buildColorPalette();
+  buildWidthButtons();
+  syncShapeAssistToggle();
   resizeCanvas();
 })();
