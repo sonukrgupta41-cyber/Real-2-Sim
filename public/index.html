@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LiveCollab Whiteboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/nano.min.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <section class="auth-panel card" id="authPanel">
+        <div>
+          <p class="eyebrow">Realtime collaborative workspace</p>
+          <h1>LiveCollab Whiteboard</h1>
+          <p class="lede">
+            Password-protected sessions, admin controls, smooth drawing, and shape-aware sketching.
+          </p>
+        </div>
+
+        <div id="authStatus" class="auth-status hidden"></div>
+
+        <div class="forms">
+          <form id="createForm" class="card inset">
+            <h2>Create session</h2>
+            <label>Display name <input name="displayName" required maxlength="32" /></label>
+            <label>Session title <input name="title" required maxlength="64" /></label>
+            <label>Password <input name="password" required type="password" minlength="4" /></label>
+            <button type="submit">Create room</button>
+          </form>
+
+          <form id="joinForm" class="card inset">
+            <h2>Join session</h2>
+            <label>Display name <input name="displayName" required maxlength="32" /></label>
+            <label>Session ID <input name="sessionId" required maxlength="16" /></label>
+            <label>Password <input name="password" required type="password" minlength="4" /></label>
+            <button type="submit">Join room</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="workspace" class="workspace hidden">
+        <aside class="sidebar">
+          <div class="card">
+            <div class="session-topbar">
+              <div>
+                <p class="eyebrow">Session</p>
+                <h2 id="sessionTitle">Whiteboard</h2>
+              </div>
+              <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" title="Toggle dark mode">
+                <span id="themeToggleIcon">◐</span>
+              </button>
+            </div>
+            <p class="meta">Room ID: <span id="sessionIdText">-</span></p>
+            <label class="share-link">
+              Shareable join link
+              <div class="share-row">
+                <input id="shareLinkInput" readonly />
+                <button id="copyLinkBtn" class="secondary" type="button">Copy</button>
+              </div>
+            </label>
+            <p class="meta">Share the link and password. The link pre-fills the room ID for collaborators.</p>
+          </div>
+
+          <div class="card">
+            <p class="eyebrow">Members</p>
+            <div id="currentRole" class="role-pill">role</div>
+            <div id="permissionsLegend" class="permission-legend"></div>
+            <div id="membersList" class="members"></div>
+          </div>
+
+          <div id="statusBar" class="card status">Disconnected</div>
+        </aside>
+
+        <main class="board-shell card">
+          <div class="board-header">
+            <p>Sketch naturally; strokes are smoothed locally and synchronized as vector items.</p>
+          </div>
+          <canvas id="board"></canvas>
+          <section class="tool-dock">
+            <div class="dock-row dock-row-top">
+              <div class="dock-group dock-tools">
+                <p class="eyebrow">Tools</p>
+                <div class="toolbar" id="toolButtons"></div>
+              </div>
+              <div class="dock-group dock-actions-group">
+                <p class="eyebrow">Board</p>
+                <div class="actions dock-actions">
+                  <button id="undoBtn" type="button">Undo last</button>
+                  <button id="clearBtn" type="button">Clear board</button>
+                </div>
+              </div>
+            </div>
+            <div class="dock-row dock-row-bottom">
+              <div class="dock-group dock-settings">
+                <section class="control-card">
+                  <p class="control-label">Stroke color</p>
+                  <div id="colorPalette" class="swatch-grid"></div>
+                  <div class="custom-color-row">
+                    <div id="customColorPicker"></div>
+                    <span class="custom-color-text">Custom color</span>
+                  </div>
+                </section>
+                <section class="control-card">
+                  <p class="control-label">Stroke width</p>
+                  <div id="widthButtons" class="width-grid"></div>
+                </section>
+                <section class="control-card">
+                  <p class="control-label">Assist</p>
+                  <button id="shapeAssistToggle" class="toggle-button active" type="button" aria-pressed="true">
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                    <span>Shape detection</span>
+                  </button>
+                </section>
+              </div>
+            </div>
+          </section>
+        </main>
+      </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
+    <script src="/app.js"></script>
+  </body>
+  </html>
