@@ -10,12 +10,9 @@ app.use(express.static(path.join(__dirname, "public")));
 const server = app.listen(process.env.PORT || 3000, () => {
   console.log(`LiveCollab listening on http://localhost:${server.address().port}`);
 });
-
 const wss = new WebSocketServer({ server, path: "/ws" });
-
 const sessions = new Map();
 const tokens = new Map();
-
 const ROLE_PERMISSIONS = {
   admin: {
     draw: true,
