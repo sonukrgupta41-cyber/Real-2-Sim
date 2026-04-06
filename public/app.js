@@ -22,6 +22,7 @@
   const tools = [
     { id: "select", icon: "⬚", label: "Select" },
     { id: "pen", icon: "✎", label: "Pen" },
+    { id: "bucket", icon: "▣", label: "Fill" },
     { id: "line", icon: "／", label: "Line" },
     { id: "rectangle", icon: "▭", label: "Rectangle" },
     { id: "ellipse", icon: "◯", label: "Ellipse" },
@@ -410,6 +411,21 @@
     return state.currentMember?.role === "admin" || item.authorId === state.currentMember?.id;
   }
 
+  function isClosedStroke(item) {
+    const points = item.points || [];
+    if (points.length < 4) {
+      return false;
+    }
+    return distance(points[0], points[points.length - 1]) < 22;
+  }
+
+  function canFillItem(item) {
+    if (!item || !canMoveItem(item)) {
+      return false;
+    }
+    return item.kind === "rectangle" || item.kind === "ellipse" || item.kind === "chart" || (item.kind === "stroke" && isClosedStroke(item));
+  }
+
   function deleteSelectedItem() {
     const selectedItem = getSelectedItem();
     if (!canRemoveItem(selectedItem)) {
@@ -485,6 +501,22 @@
     return { start: item.start, end: item.end };
   }
 
+  function fillItem(item, fillColor) {
+    if (!canFillItem(item)) {
+      return;
+    }
+
+    const updates =
+      item.kind === "chart"
+        ? { fillColor }
+        : { fillColor };
+
+    sendMessage("board:updateItem", {
+      itemId: item.id,
+      updates
+    });
+  }
+
   function drawChartPlaceholder(item) {
     const bounds = getChartBounds(item);
     const palette = getChartPalette();
@@ -527,12 +559,16 @@
             data: item.values || [],
             backgroundColor:
               item.chartType === "line"
-                ? palette.fill
-                : (item.values || []).map((_, index) => palette.series[index % palette.series.length]),
+                ? item.fillColor || palette.fill
+                : item.chartType === "bar"
+                  ? item.fillColor || palette.series[0]
+                  : (item.values || []).map((_, index) => item.fillColor || palette.series[index % palette.series.length]),
             borderColor:
               item.chartType === "line"
                 ? palette.accent
-                : (item.values || []).map((_, index) => palette.series[index % palette.series.length]),
+                : item.chartType === "bar"
+                  ? item.color || palette.accent
+                  : (item.values || []).map((_, index) => item.color || palette.series[index % palette.series.length]),
             borderWidth: 2,
             tension: 0.32,
             fill: item.chartType === "line",
@@ -679,6 +715,16 @@
 
     switch (item.kind) {
       case "stroke":
+        if (item.fillColor && isClosedStroke(item)) {
+          ctx.fillStyle = item.fillColor;
+          ctx.beginPath();
+          ctx.moveTo(item.points[0].x, item.points[0].y);
+          for (let index = 1; index < item.points.length; index += 1) {
+            ctx.lineTo(item.points[index].x, item.points[index].y);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
         renderStrokePath(item.points || []);
         break;
       case "chart":
@@ -695,6 +741,15 @@
         }
         break;
       case "rectangle":
+        if (item.fillColor) {
+          ctx.fillStyle = item.fillColor;
+          ctx.fillRect(
+            Math.min(item.start.x, item.end.x),
+            Math.min(item.start.y, item.end.y),
+            Math.abs(item.end.x - item.start.x),
+            Math.abs(item.end.y - item.start.y)
+          );
+        }
         ctx.strokeRect(
           Math.min(item.start.x, item.end.x),
           Math.min(item.start.y, item.end.y),
@@ -703,6 +758,20 @@
         );
         break;
       case "ellipse":
+        if (item.fillColor) {
+          ctx.fillStyle = item.fillColor;
+          ctx.beginPath();
+          ctx.ellipse(
+            (item.start.x + item.end.x) / 2,
+            (item.start.y + item.end.y) / 2,
+            Math.abs(item.end.x - item.start.x) / 2,
+            Math.abs(item.end.y - item.start.y) / 2,
+            0,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
         ctx.beginPath();
         ctx.ellipse(
           (item.start.x + item.end.x) / 2,
@@ -1098,6 +1167,16 @@
       }
       updatePermissionsUi();
       render();
+      return;
+    }
+
+    if (state.currentTool === "bucket") {
+      const hit = hitTest(getPoint(event));
+      if (hit && canFillItem(hit)) {
+        fillItem(hit, state.currentColor);
+      } else {
+        setStatus("Bucket fill works on bounded shapes and closed strokes.", true);
+      }
       return;
     }
 
