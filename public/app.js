@@ -22,7 +22,7 @@
     { id: "rectangle", icon: "▭", label: "Rectangle" },
     { id: "ellipse", icon: "◯", label: "Ellipse" },
     { id: "arrow", icon: "➜", label: "Arrow" },
-    { id: "eraser", icon: "⌫", label: "Eraser" }
+    { id: "eraser", icon: "⌦", label: "Eraser" }
   ];
   const colors = ["#0f172a", "#cb4b16", "#236a4b", "#2563eb", "#be123c", "#7c3aed", "#111827", "#ffffff"];
   const widths = [2, 3, 5, 8, 12];
@@ -34,6 +34,7 @@
     joinForm: document.getElementById("joinForm"),
     toolButtons: document.getElementById("toolButtons"),
     colorPalette: document.getElementById("colorPalette"),
+    customColorPicker: document.getElementById("customColorPicker"),
     widthButtons: document.getElementById("widthButtons"),
     shapeAssistToggle: document.getElementById("shapeAssistToggle"),
     clearBtn: document.getElementById("clearBtn"),
@@ -52,6 +53,7 @@
   };
 
   const ctx = appEls.canvas.getContext("2d");
+  let pickr = null;
 
   function can(permission) {
     const role = state.currentMember?.role;
@@ -150,6 +152,7 @@
       button.addEventListener("click", () => {
         state.currentColor = color;
         buildColorPalette();
+        syncPickrColor();
       });
       appEls.colorPalette.appendChild(button);
     });
@@ -184,6 +187,44 @@
   function syncShapeAssistToggle() {
     appEls.shapeAssistToggle.classList.toggle("active", state.shapeAssistEnabled);
     appEls.shapeAssistToggle.setAttribute("aria-pressed", String(state.shapeAssistEnabled));
+  }
+
+  function syncPickrColor() {
+    if (pickr) {
+      pickr.setColor(state.currentColor, true);
+    }
+  }
+
+  function initCustomColorPicker() {
+    if (!window.Pickr || !appEls.customColorPicker) {
+      return;
+    }
+
+    pickr = window.Pickr.create({
+      el: appEls.customColorPicker,
+      theme: "nano",
+      default: state.currentColor,
+      components: {
+        preview: true,
+        opacity: false,
+        hue: true,
+        interaction: {
+          hex: true,
+          input: true,
+          save: true
+        }
+      }
+    });
+
+    pickr.on("save", (color) => {
+      if (!color) {
+        return;
+      }
+      state.currentColor = color.toHEXA().toString();
+      buildColorPalette();
+      syncPickrColor();
+      pickr.hide();
+    });
   }
 
   function syncTheme() {
@@ -238,7 +279,9 @@
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     if (preview) {
-      ctx.setLineDash([12, 10]);
+      const dashSize = Math.max(8, (item.width || 3) * 3);
+      const gapSize = Math.max(6, (item.width || 3) * 2.4);
+      ctx.setLineDash([dashSize, gapSize]);
       ctx.globalAlpha = 0.75;
     }
 
@@ -339,6 +382,7 @@
     };
     const width = box.maxX - box.minX;
     const height = box.maxY - box.minY;
+    const aspectRatio = width / Math.max(height, 1);
 
     if (!closed) {
       const direct = distance(start, end);
@@ -374,8 +418,21 @@
     const meanRadius = radii.reduce((sum, radius) => sum + radius, 0) / radii.length;
     const variance =
       radii.reduce((sum, radius) => sum + Math.abs(radius - meanRadius), 0) / Math.max(radii.length, 1);
+    const normalizedVariance = variance / Math.max(meanRadius, 1);
+    const sectorHits = new Set(
+      points.map((point) => {
+        const angle = Math.atan2(point.y - center.y, point.x - center.x) + Math.PI;
+        return Math.floor((angle / (Math.PI * 2)) * 8);
+      })
+    ).size;
 
-    if (variance < 18) {
+    if (
+      normalizedVariance < 0.22 &&
+      aspectRatio > 0.78 &&
+      aspectRatio < 1.22 &&
+      sectorHits >= 7 &&
+      points.length > 18
+    ) {
       return {
         kind: "ellipse",
         start: { x: box.minX, y: box.minY },
@@ -730,6 +787,7 @@
   syncTheme();
   resetToolButtons();
   buildColorPalette();
+  initCustomColorPicker();
   buildWidthButtons();
   syncShapeAssistToggle();
   resizeCanvas();

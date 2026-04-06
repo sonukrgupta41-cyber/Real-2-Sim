@@ -14,6 +14,8 @@
   --surface-soft: rgba(255, 255, 255, 0.72);
   --surface-strong: rgba(255, 250, 242, 0.92);
   --grid-line: rgba(27, 29, 34, 0.06);
+  --button-bg: #1b1d22;
+  --button-fg: #fffaf2;
 }
 
 body[data-theme="dark"] {
@@ -32,6 +34,8 @@ body[data-theme="dark"] {
   --surface-soft: rgba(28, 35, 45, 0.9);
   --surface-strong: rgba(20, 26, 35, 0.94);
   --grid-line: rgba(255, 245, 229, 0.08);
+  --button-bg: #f97316;
+  --button-fg: #1a120d;
 }
 
 * {
@@ -156,8 +160,8 @@ button {
 }
 
 button {
-  background: var(--ink);
-  color: white;
+  background: var(--button-bg);
+  color: var(--button-fg);
   cursor: pointer;
 }
 
@@ -194,13 +198,13 @@ button.danger {
 }
 
 .toolbar button {
-  width: 54px;
-  height: 54px;
+  width: 46px;
+  height: 46px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 700;
   background: var(--surface);
   color: var(--ink);
@@ -217,6 +221,7 @@ button.danger {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+  align-items: start;
 }
 
 .toggle {
@@ -265,13 +270,25 @@ button.danger {
 
 .tool-dock {
   display: grid;
-  grid-template-columns: minmax(280px, 1.15fr) minmax(320px, 1.2fr) auto;
-  gap: 12px;
+  gap: 10px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface-strong);
-  align-items: stretch;
+}
+
+.dock-row {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+}
+
+.dock-row-top {
+  grid-template-columns: minmax(280px, 1fr) minmax(220px, auto);
+}
+
+.dock-row-bottom {
+  grid-template-columns: 1fr;
 }
 
 .dock-group {
@@ -285,7 +302,7 @@ button.danger {
 
 .dock-settings {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: stretch;
+  align-items: start;
   gap: 10px;
 }
 
@@ -297,6 +314,7 @@ button.danger {
   border-radius: 16px;
   background: var(--surface-soft);
   align-content: start;
+  min-height: 0;
 }
 
 .control-label {
@@ -313,6 +331,35 @@ button.danger {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.custom-color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.custom-color-text {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.pickr .pcr-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: inset 0 -2px 0 rgba(27, 29, 34, 0.05);
+}
+
+body[data-theme="dark"] .pickr .pcr-button {
+  box-shadow: inset 0 -2px 0 rgba(255, 245, 229, 0.04);
+}
+
+.pickr .pcr-button::before,
+.pickr .pcr-button::after {
+  border-radius: 10px;
 }
 
 .swatch {
@@ -339,7 +386,7 @@ button.danger {
 
 .width-chip {
   min-width: 48px;
-  height: 38px;
+  height: 36px;
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
@@ -356,13 +403,13 @@ button.danger {
 }
 
 .width-chip.active {
-  background: var(--ink);
-  color: white;
+  background: var(--button-bg);
+  color: var(--button-fg);
 }
 
 .toggle-button {
-  min-height: 48px;
-  padding: 10px 12px;
+  min-height: 40px;
+  padding: 8px 12px;
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
@@ -407,8 +454,15 @@ button.danger {
 }
 
 .dock-actions {
-  min-width: 220px;
-  align-content: stretch;
+  min-width: 210px;
+  align-content: start;
+  align-self: start;
+}
+
+.dock-actions button {
+  min-height: 54px;
+  padding: 0 18px;
+  font-size: 0.98rem;
 }
 
 .board-header {
@@ -420,7 +474,7 @@ button.danger {
   height: calc(100vh - 120px);
   border-radius: 18px;
   background:
-    linear-gradient(transparent 31px, rgba(27, 29, 34, 0.06) 32px),
+    linear-gradient(transparent 31px, var(--grid-line) 32px),
     linear-gradient(90deg, transparent 31px, var(--grid-line) 32px),
     #fffdf9;
   background-size: 32px 32px;
@@ -459,7 +513,7 @@ body[data-theme="dark"] #board {
   padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--surface-soft);
   color: var(--muted);
   font-size: 0.78rem;
 }
@@ -543,6 +597,10 @@ body[data-theme="dark"] #board {
   }
 
   .tool-dock {
+    gap: 12px;
+  }
+
+  .dock-row-top {
     grid-template-columns: 1fr;
   }
 
