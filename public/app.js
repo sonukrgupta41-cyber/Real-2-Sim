@@ -11,6 +11,7 @@
     shapeAssistEnabled: true,
     theme: localStorage.getItem("livecollab-theme") || "light",
     boardItems: [],
+    chatMessages: [],
     draftPoints: [],
     drawing: false,
     dragState: null,
@@ -54,6 +55,9 @@
     clearBtn: document.getElementById("clearBtn"),
     undoBtn: document.getElementById("undoBtn"),
     membersList: document.getElementById("membersList"),
+    chatMessages: document.getElementById("chatMessages"),
+    chatForm: document.getElementById("chatForm"),
+    chatInput: document.getElementById("chatInput"),
     permissionsLegend: document.getElementById("permissionsLegend"),
     sessionTitle: document.getElementById("sessionTitle"),
     sessionIdText: document.getElementById("sessionIdText"),
@@ -141,6 +145,38 @@
       chip.textContent = name;
       container.appendChild(chip);
     });
+  }
+
+  function renderChatMessages() {
+    appEls.chatMessages.innerHTML = "";
+    state.chatMessages.forEach((message) => {
+      const article = document.createElement("article");
+      article.className = "chat-message";
+      if (message.memberId === state.currentMember?.id) {
+        article.classList.add("own");
+      }
+
+      const meta = document.createElement("div");
+      meta.className = "chat-message-meta";
+      meta.textContent = `${message.memberName} · ${new Date(message.createdAt).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit"
+      })}`;
+
+      const body = document.createElement("p");
+      body.textContent = message.text;
+
+      article.appendChild(meta);
+      article.appendChild(body);
+      appEls.chatMessages.appendChild(article);
+    });
+
+    appEls.chatMessages.scrollTop = appEls.chatMessages.scrollHeight;
+  }
+
+  function resizeChatInput() {
+    appEls.chatInput.style.height = "auto";
+    appEls.chatInput.style.height = `${Math.min(appEls.chatInput.scrollHeight, 140)}px`;
   }
 
   function renderPermissionsLegend() {
@@ -864,6 +900,7 @@
           state.session = message.payload.session;
           state.currentMember = message.payload.currentMember;
           state.boardItems = state.session.boardItems || [];
+          state.chatMessages = state.session.chatMessages || [];
           state.selectedItemId = null;
           enterWorkspace();
           render();
@@ -905,6 +942,13 @@
           renderMembers();
           updatePermissionsUi();
           break;
+        case "chat:newMessage":
+          state.chatMessages.push(message.payload);
+          if (state.chatMessages.length > 100) {
+            state.chatMessages.shift();
+          }
+          renderChatMessages();
+          break;
         case "member:kicked":
           alert(message.payload.message);
           window.location.reload();
@@ -931,6 +975,7 @@
     appEls.shareLinkInput.value = buildShareLink(state.session.id);
     window.history.replaceState({}, "", `?sessionId=${encodeURIComponent(state.session.id)}`);
     renderMembers();
+    renderChatMessages();
     updatePermissionsUi();
     resizeCanvas();
   }
@@ -1243,6 +1288,20 @@
     }
   });
 
+  appEls.chatForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const text = String(appEls.chatInput.value || "").trim();
+    if (!text) {
+      return;
+    }
+    sendMessage("chat:send", { text });
+    appEls.chatInput.value = "";
+    resizeChatInput();
+    appEls.chatInput.focus();
+  });
+
+  appEls.chatInput.addEventListener("input", resizeChatInput);
+
   (function hydrateJoinFormFromUrl() {
     const sessionId = new URLSearchParams(window.location.search).get("sessionId");
     if (!sessionId) {
@@ -1312,5 +1371,6 @@
   initCustomColorPicker();
   buildWidthButtons();
   syncShapeAssistToggle();
+  resizeChatInput();
   resizeCanvas();
 })();

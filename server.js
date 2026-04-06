@@ -61,6 +61,7 @@ function sessionSnapshot(session) {
     title: session.title,
     createdAt: session.createdAt,
     boardItems: session.boardItems,
+    chatMessages: session.chatMessages,
     members: Array.from(session.members.values()).map(safeMember),
     permissions: ROLE_PERMISSIONS
   };
@@ -108,6 +109,7 @@ app.post("/api/sessions", (req, res) => {
     createdAt: new Date().toISOString(),
     members: new Map([[memberId, admin]]),
     boardItems: [],
+    chatMessages: [],
     sockets: new Set()
   };
 
@@ -315,6 +317,29 @@ wss.on("connection", (ws) => {
 
         session.boardItems = [];
         broadcastToSession(session, "board:cleared", {});
+        return;
+      }
+      case "chat:send": {
+        const text = String(message.payload?.text || "").trim();
+        if (!text) {
+          return;
+        }
+
+        const chatMessage = {
+          id: createId(12),
+          memberId: actor.id,
+          memberName: actor.name,
+          memberRole: actor.role,
+          text: text.slice(0, 500),
+          createdAt: new Date().toISOString()
+        };
+
+        session.chatMessages.push(chatMessage);
+        if (session.chatMessages.length > 100) {
+          session.chatMessages.shift();
+        }
+
+        broadcastToSession(session, "chat:newMessage", chatMessage);
         return;
       }
       case "member:updateRole": {

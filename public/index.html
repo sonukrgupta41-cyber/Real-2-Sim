@@ -157,6 +157,26 @@
             <div id="membersList" class="members"></div>
           </div>
 
+          <div class="card chat-panel">
+            <div class="chat-head">
+              <div>
+                <p class="eyebrow">Chat</p>
+                <h3>Room chat</h3>
+              </div>
+            </div>
+            <div id="chatMessages" class="chat-messages"></div>
+            <form id="chatForm" class="chat-form">
+              <textarea
+                id="chatInput"
+                name="message"
+                maxlength="500"
+                rows="1"
+                placeholder="Message the room"
+              ></textarea>
+              <button type="submit">Send</button>
+            </form>
+          </div>
+
           <div id="statusBar" class="card status">Disconnected</div>
         </aside>
 
