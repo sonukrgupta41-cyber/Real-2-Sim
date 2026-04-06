@@ -4,3 +4,4 @@ AUTHTOKEN
 *.token
 push_with_identity.sh
 push_local.sh
+dist

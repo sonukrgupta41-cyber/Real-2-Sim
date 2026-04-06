@@ -9,33 +9,121 @@
   </head>
   <body>
     <div id="app">
-      <section class="auth-panel card" id="authPanel">
-        <div>
-          <p class="eyebrow">Realtime collaborative workspace</p>
-          <h1>LiveCollab Whiteboard</h1>
-          <p class="lede">
-            Password-protected sessions, admin controls, smooth drawing, and shape-aware sketching.
-          </p>
+      <section class="auth-panel" id="authPanel">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Realtime collaborative workspace</p>
+            <h1>Whiteboarding that feels live, not blank.</h1>
+            <p class="lede">
+              Create a private room, invite collaborators, sketch naturally, and manage roles without leaving the canvas.
+            </p>
+
+            <div class="hero-actions">
+              <button class="hero-link" type="button" data-auth-tab-trigger="create">Start a room</button>
+              <button class="hero-link secondary-link" type="button" data-auth-tab-trigger="join">Join an existing room</button>
+            </div>
+
+            <div class="hero-points">
+              <article class="hero-point">
+                <strong>Live roles</strong>
+                <p>Admins can promote, limit, or remove members in-session.</p>
+              </article>
+              <article class="hero-point">
+                <strong>Shape-aware drawing</strong>
+                <p>Rough strokes resolve into clean lines, boxes, and ellipses.</p>
+              </article>
+              <article class="hero-point">
+                <strong>Invite-ready links</strong>
+                <p>Share a room URL that pre-fills the session ID for teammates.</p>
+              </article>
+            </div>
+          </div>
+
+          <div class="hero-preview card inset">
+            <div class="preview-window">
+              <div class="preview-toolbar">
+                <span></span><span></span><span></span>
+              </div>
+              <div class="preview-canvas">
+                <div class="preview-note note-one">Sprint map</div>
+                <div class="preview-note note-two">API review</div>
+                <div class="preview-note note-three">UI flow</div>
+                <svg viewBox="0 0 320 220" class="preview-lines" aria-hidden="true">
+                  <path d="M24 162 C70 110, 128 92, 176 122 S266 170, 300 120" />
+                  <path d="M38 52 L128 52 L128 102 L38 102 Z" />
+                  <path d="M178 46 C225 20, 292 36, 282 90 C274 130, 208 140, 182 102 C164 76, 162 58, 178 46 Z" />
+                  <path d="M116 170 L214 170" />
+                  <path d="M202 160 L214 170 L202 180" />
+                </svg>
+              </div>
+              <div class="preview-footer">
+                <div>
+                  <small>3 collaborators online</small>
+                  <strong>Room protected</strong>
+                </div>
+                <div class="preview-badge">Live sync</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div id="authStatus" class="auth-status hidden"></div>
 
-        <div class="forms">
-          <form id="createForm" class="card inset">
-            <h2>Create session</h2>
-            <label>Display name <input name="displayName" required maxlength="32" /></label>
-            <label>Session title <input name="title" required maxlength="64" /></label>
-            <label>Password <input name="password" required type="password" minlength="4" /></label>
-            <button type="submit">Create room</button>
-          </form>
+        <div class="auth-tabs card inset">
+          <div class="auth-tablist" role="tablist" aria-label="Session access">
+            <button
+              id="createTab"
+              class="auth-tab active"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="createPanel"
+              data-auth-tab="create"
+            >
+              Create session
+            </button>
+            <button
+              id="joinTab"
+              class="auth-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="joinPanel"
+              data-auth-tab="join"
+            >
+              Join session
+            </button>
+          </div>
 
-          <form id="joinForm" class="card inset">
-            <h2>Join session</h2>
-            <label>Display name <input name="displayName" required maxlength="32" /></label>
-            <label>Session ID <input name="sessionId" required maxlength="16" /></label>
-            <label>Password <input name="password" required type="password" minlength="4" /></label>
-            <button type="submit">Join room</button>
-          </form>
+          <div class="forms">
+            <div id="createPanel" class="auth-panel-content active" role="tabpanel" aria-labelledby="createTab">
+              <form id="createForm" class="auth-form">
+                <div class="form-heading">
+                  <p class="eyebrow">New Room</p>
+                  <h2>Create session</h2>
+                  <p>Start a password-protected workspace and become the room admin.</p>
+                </div>
+                <label>Display name <input name="displayName" required maxlength="32" placeholder="Ava" /></label>
+                <label>Session title <input name="title" required maxlength="64" placeholder="Product critique" /></label>
+                <label>Password <input name="password" required type="password" minlength="4" placeholder="Minimum 4 characters" /></label>
+                <button type="submit">Create room</button>
+              </form>
+            </div>
+
+            <div id="joinPanel" class="auth-panel-content hidden" role="tabpanel" aria-labelledby="joinTab">
+              <form id="joinForm" class="auth-form">
+                <div class="form-heading">
+                  <p class="eyebrow">Existing Room</p>
+                  <h2>Join session</h2>
+                  <p>Use the shared room ID and password to enter as a collaborator.</p>
+                </div>
+                <label>Display name <input name="displayName" required maxlength="32" placeholder="Liam" /></label>
+                <label>Session ID <input name="sessionId" required maxlength="16" placeholder="Room ID" /></label>
+                <label>Password <input name="password" required type="password" minlength="4" placeholder="Room password" /></label>
+                <button type="submit">Join room</button>
+              </form>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -86,6 +174,8 @@
               <div class="dock-group dock-actions-group">
                 <p class="eyebrow">Board</p>
                 <div class="actions dock-actions">
+                  <button id="addChartBtn" type="button">Add chart</button>
+                  <button id="deleteSelectionBtn" type="button">Delete selected</button>
                   <button id="undoBtn" type="button">Undo last</button>
                   <button id="clearBtn" type="button">Clear board</button>
                 </div>
@@ -119,7 +209,51 @@
       </section>
     </div>
 
+    <div id="chartModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-chart-modal="true"></div>
+      <section class="modal-card card" role="dialog" aria-modal="true" aria-labelledby="chartModalTitle">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Board element</p>
+            <h2 id="chartModalTitle">Add chart</h2>
+          </div>
+          <button id="closeChartModalBtn" class="secondary modal-close" type="button" aria-label="Close chart form">
+            Close
+          </button>
+        </div>
+        <form id="chartForm" class="chart-form">
+          <label>
+            Chart type
+            <select name="chartType">
+              <option value="bar">Bar</option>
+              <option value="line">Line</option>
+              <option value="pie">Pie</option>
+            </select>
+          </label>
+          <label>
+            Title
+            <input name="title" maxlength="48" placeholder="Quarterly progress" />
+          </label>
+          <label>
+            Series label
+            <input name="datasetLabel" maxlength="32" placeholder="Milestones" />
+          </label>
+          <label>
+            Labels
+            <input name="labels" required placeholder="Jan, Feb, Mar, Apr" />
+          </label>
+          <label>
+            Values
+            <input name="values" required placeholder="12, 18, 9, 24" />
+          </label>
+          <p class="modal-note">Use comma-separated labels and numeric values. The chart is added as a synchronized board item.</p>
+          <button type="submit">Insert chart</button>
+        </form>
+      </section>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/app.js"></script>
   </body>
   </html>

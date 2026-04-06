@@ -270,6 +270,40 @@ wss.on("connection", (ws) => {
         broadcastToSession(session, "board:itemRemoved", { itemId: item.id });
         return;
       }
+      case "board:updateItem": {
+        if (!assertPermission(session, actor.id, "draw")) {
+          send(ws, "error", { message: "You do not have permission to move items" });
+          return;
+        }
+
+        const itemIndex = session.boardItems.findIndex((item) => item.id === message.payload?.itemId);
+        if (itemIndex === -1) {
+          return;
+        }
+
+        const item = session.boardItems[itemIndex];
+        if (actor.role !== "admin" && item.authorId !== actor.id) {
+          send(ws, "error", { message: "You can only move your own items" });
+          return;
+        }
+
+        const updates = message.payload?.updates;
+        if (!updates || typeof updates !== "object") {
+          return;
+        }
+
+        const updatedItem = {
+          ...item,
+          ...updates,
+          id: item.id,
+          authorId: item.authorId,
+          createdAt: item.createdAt
+        };
+
+        session.boardItems[itemIndex] = updatedItem;
+        broadcastToSession(session, "board:itemUpdated", updatedItem);
+        return;
+      }
       case "board:clear": {
         if (!assertPermission(session, actor.id, "clearBoard")) {
           send(ws, "error", { message: "Only admins can clear the board" });

@@ -5,6 +5,7 @@
     session: null,
     currentMember: null,
     currentTool: "pen",
+    selectedItemId: null,
     currentColor: "#0f172a",
     currentWidth: 3,
     shapeAssistEnabled: true,
@@ -12,11 +13,13 @@
     boardItems: [],
     draftPoints: [],
     drawing: false,
+    dragState: null,
     clientId: Math.random().toString(36).slice(2),
     deviceScale: window.devicePixelRatio || 1
   };
 
   const tools = [
+    { id: "select", icon: "⬚", label: "Select" },
     { id: "pen", icon: "✎", label: "Pen" },
     { id: "line", icon: "／", label: "Line" },
     { id: "rectangle", icon: "▭", label: "Rectangle" },
@@ -32,11 +35,22 @@
     workspace: document.getElementById("workspace"),
     createForm: document.getElementById("createForm"),
     joinForm: document.getElementById("joinForm"),
+    authTabs: Array.from(document.querySelectorAll("[data-auth-tab]")),
+    authTabTriggers: Array.from(document.querySelectorAll("[data-auth-tab-trigger]")),
+    authPanels: {
+      create: document.getElementById("createPanel"),
+      join: document.getElementById("joinPanel")
+    },
+    addChartBtn: document.getElementById("addChartBtn"),
+    chartModal: document.getElementById("chartModal"),
+    chartForm: document.getElementById("chartForm"),
+    closeChartModalBtn: document.getElementById("closeChartModalBtn"),
     toolButtons: document.getElementById("toolButtons"),
     colorPalette: document.getElementById("colorPalette"),
     customColorPicker: document.getElementById("customColorPicker"),
     widthButtons: document.getElementById("widthButtons"),
     shapeAssistToggle: document.getElementById("shapeAssistToggle"),
+    deleteSelectionBtn: document.getElementById("deleteSelectionBtn"),
     clearBtn: document.getElementById("clearBtn"),
     undoBtn: document.getElementById("undoBtn"),
     membersList: document.getElementById("membersList"),
@@ -54,6 +68,24 @@
 
   const ctx = appEls.canvas.getContext("2d");
   let pickr = null;
+  const chartImageCache = new Map();
+  const chartRenderJobs = new Map();
+
+  function switchAuthTab(tab) {
+    const nextTab = tab === "join" ? "join" : "create";
+
+    appEls.authTabs.forEach((button) => {
+      const active = button.dataset.authTab === nextTab;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
+    });
+
+    Object.entries(appEls.authPanels).forEach(([panelName, panel]) => {
+      const active = panelName === nextTab;
+      panel.classList.toggle("hidden", !active);
+      panel.classList.toggle("active", active);
+    });
+  }
 
   function can(permission) {
     const role = state.currentMember?.role;
@@ -133,11 +165,22 @@
       button.setAttribute("aria-label", tool.label);
       button.className = tool.id === state.currentTool ? "active" : "";
       button.addEventListener("click", () => {
-        state.currentTool = tool.id;
-        resetToolButtons();
+        setCurrentTool(tool.id);
       });
       appEls.toolButtons.appendChild(button);
     });
+  }
+
+  function setCurrentTool(toolId) {
+    state.currentTool = toolId;
+    state.drawing = false;
+    state.draftPoints = [];
+    if (toolId !== "select") {
+      state.selectedItemId = null;
+    }
+    resetToolButtons();
+    updatePermissionsUi();
+    render();
   }
 
   function buildColorPalette() {
@@ -195,6 +238,10 @@
     }
   }
 
+  function getBoardSurfaceColor() {
+    return state.theme === "dark" ? "#0f1620" : "#fffdf9";
+  }
+
   function initCustomColorPicker() {
     if (!window.Pickr || !appEls.customColorPicker) {
       return;
@@ -233,6 +280,8 @@
     appEls.themeToggle.title = state.theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
     appEls.themeToggleIcon.textContent = state.theme === "dark" ? "☀" : "◐";
     localStorage.setItem("livecollab-theme", state.theme);
+    chartImageCache.clear();
+    chartRenderJobs.clear();
     render();
   }
 
@@ -253,6 +302,313 @@
     appEls.canvas.height = rect.height * state.deviceScale;
     ctx.setTransform(state.deviceScale, 0, 0, state.deviceScale, 0, 0);
     render();
+  }
+
+  function getChartBounds(item) {
+    return {
+      x: Number(item.x ?? 96),
+      y: Number(item.y ?? 88),
+      width: Math.max(220, Number(item.width ?? 320)),
+      height: Math.max(180, Number(item.height ?? 220))
+    };
+  }
+
+  function getChartPalette() {
+    if (state.theme === "dark") {
+      return {
+        text: "#f5f1e8",
+        muted: "#b7b0a5",
+        grid: "rgba(255, 245, 229, 0.12)",
+        frame: "#223041",
+        surface: "#111923",
+        accent: "#f97316",
+        fill: "rgba(249, 115, 22, 0.22)",
+        series: ["#f97316", "#38bdf8", "#4ade80", "#facc15", "#fb7185", "#c084fc"]
+      };
+    }
+
+    return {
+      text: "#1b1d22",
+      muted: "#615a52",
+      grid: "rgba(27, 29, 34, 0.1)",
+      frame: "#d9d1c8",
+      surface: "#fffdf9",
+      accent: "#cb4b16",
+      fill: "rgba(203, 75, 22, 0.18)",
+      series: ["#cb4b16", "#2563eb", "#236a4b", "#eab308", "#be123c", "#7c3aed"]
+    };
+  }
+
+  function clearChartCacheForItem(itemId) {
+    Array.from(chartImageCache.keys()).forEach((key) => {
+      if (key.startsWith(`${itemId}:`)) {
+        chartImageCache.delete(key);
+      }
+    });
+    Array.from(chartRenderJobs.keys()).forEach((key) => {
+      if (key.startsWith(`${itemId}:`)) {
+        chartRenderJobs.delete(key);
+      }
+    });
+  }
+
+  function getChartCacheKey(item) {
+    return `${item.id || "draft"}:${state.theme}`;
+  }
+
+  function getSelectedItem() {
+    return state.boardItems.find((item) => item.id === state.selectedItemId) || null;
+  }
+
+  function canRemoveItem(item) {
+    if (!item || !can("erase")) {
+      return false;
+    }
+    return state.currentMember?.role === "admin" || item.authorId === state.currentMember?.id;
+  }
+
+  function canMoveItem(item) {
+    if (!item || !can("draw")) {
+      return false;
+    }
+    return state.currentMember?.role === "admin" || item.authorId === state.currentMember?.id;
+  }
+
+  function deleteSelectedItem() {
+    const selectedItem = getSelectedItem();
+    if (!canRemoveItem(selectedItem)) {
+      return;
+    }
+    sendMessage("board:removeItem", { itemId: selectedItem.id });
+  }
+
+  function itemBounds(item) {
+    if (item.kind === "stroke") {
+      const points = item.points || [];
+      return {
+        minX: Math.min(...points.map((point) => point.x)),
+        minY: Math.min(...points.map((point) => point.y)),
+        maxX: Math.max(...points.map((point) => point.x)),
+        maxY: Math.max(...points.map((point) => point.y))
+      };
+    }
+    if (item.kind === "chart") {
+      const bounds = getChartBounds(item);
+      return {
+        minX: bounds.x,
+        minY: bounds.y,
+        maxX: bounds.x + bounds.width,
+        maxY: bounds.y + bounds.height
+      };
+    }
+    return {
+      minX: Math.min(item.start.x, item.end.x),
+      minY: Math.min(item.start.y, item.end.y),
+      maxX: Math.max(item.start.x, item.end.x),
+      maxY: Math.max(item.start.y, item.end.y)
+    };
+  }
+
+  function buildMovedItem(item, deltaX, deltaY) {
+    if (item.kind === "stroke") {
+      return {
+        ...item,
+        points: (item.points || []).map((point) => ({
+          x: point.x + deltaX,
+          y: point.y + deltaY
+        }))
+      };
+    }
+    if (item.kind === "chart") {
+      return {
+        ...item,
+        x: item.x + deltaX,
+        y: item.y + deltaY
+      };
+    }
+    return {
+      ...item,
+      start: {
+        x: item.start.x + deltaX,
+        y: item.start.y + deltaY
+      },
+      end: {
+        x: item.end.x + deltaX,
+        y: item.end.y + deltaY
+      }
+    };
+  }
+
+  function itemUpdatePayload(item) {
+    if (item.kind === "stroke") {
+      return { points: item.points };
+    }
+    if (item.kind === "chart") {
+      return { x: item.x, y: item.y };
+    }
+    return { start: item.start, end: item.end };
+  }
+
+  function drawChartPlaceholder(item) {
+    const bounds = getChartBounds(item);
+    const palette = getChartPalette();
+    ctx.save();
+    ctx.fillStyle = palette.surface;
+    ctx.strokeStyle = palette.frame;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, 18);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = palette.text;
+    ctx.font = '600 14px "Avenir Next", "Trebuchet MS", sans-serif';
+    ctx.fillText(item.title || "Chart", bounds.x + 16, bounds.y + 24);
+    ctx.fillStyle = palette.muted;
+    ctx.font = '500 12px "Avenir Next", "Trebuchet MS", sans-serif';
+    ctx.fillText("Rendering chart...", bounds.x + 16, bounds.y + 46);
+    ctx.restore();
+  }
+
+  function buildChartImage(item) {
+    const cacheKey = getChartCacheKey(item);
+    if (chartImageCache.has(cacheKey) || chartRenderJobs.has(cacheKey) || !window.Chart) {
+      return;
+    }
+
+    const bounds = getChartBounds(item);
+    const palette = getChartPalette();
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bounds.width * 2);
+    canvas.height = Math.round(bounds.height * 2);
+
+    const chart = new window.Chart(canvas.getContext("2d"), {
+      type: item.chartType || "bar",
+      data: {
+        labels: item.labels || [],
+        datasets: [
+          {
+            label: item.datasetLabel || item.title || "Series",
+            data: item.values || [],
+            backgroundColor:
+              item.chartType === "line"
+                ? palette.fill
+                : (item.values || []).map((_, index) => palette.series[index % palette.series.length]),
+            borderColor:
+              item.chartType === "line"
+                ? palette.accent
+                : (item.values || []).map((_, index) => palette.series[index % palette.series.length]),
+            borderWidth: 2,
+            tension: 0.32,
+            fill: item.chartType === "line",
+            pointRadius: item.chartType === "line" ? 3 : 0
+          }
+        ]
+      },
+      options: {
+        animation: false,
+        responsive: false,
+        maintainAspectRatio: false,
+        devicePixelRatio: 1,
+        plugins: {
+          legend: {
+            display: item.chartType !== "bar" || Boolean(item.datasetLabel),
+            labels: {
+              color: palette.text,
+              boxWidth: 12
+            }
+          },
+          title: {
+            display: Boolean(item.title),
+            text: item.title || "",
+            color: palette.text,
+            font: {
+              size: 14,
+              weight: "600"
+            }
+          }
+        },
+        scales:
+          item.chartType === "pie"
+            ? {}
+            : {
+                x: {
+                  ticks: { color: palette.muted },
+                  grid: { color: palette.grid }
+                },
+                y: {
+                  beginAtZero: true,
+                  ticks: { color: palette.muted },
+                  grid: { color: palette.grid }
+                }
+              }
+      }
+    });
+
+    chartRenderJobs.set(cacheKey, true);
+    chart.update();
+
+    const image = new Image();
+    image.onload = () => {
+      chart.destroy();
+      chartImageCache.set(cacheKey, image);
+      chartRenderJobs.delete(cacheKey);
+      render();
+    };
+    image.onerror = () => {
+      chart.destroy();
+      chartRenderJobs.delete(cacheKey);
+    };
+    image.src = canvas.toDataURL("image/png");
+  }
+
+  function drawChartItem(item) {
+    const bounds = getChartBounds(item);
+    const cacheKey = getChartCacheKey(item);
+    const image = chartImageCache.get(cacheKey);
+
+    if (!image) {
+      buildChartImage(item);
+      drawChartPlaceholder(item);
+      return;
+    }
+
+    ctx.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height);
+  }
+
+  function drawSelectionOutline(item) {
+    if (!item) {
+      return;
+    }
+
+    const { minX, minY, maxX, maxY } = itemBounds(item);
+
+    ctx.save();
+    ctx.setLineDash([8, 6]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = state.theme === "dark" ? "#f97316" : "#cb4b16";
+    ctx.strokeRect(minX - 8, minY - 8, maxX - minX + 16, maxY - minY + 16);
+    ctx.restore();
+  }
+
+  function openChartModal() {
+    appEls.chartModal.classList.remove("hidden");
+    appEls.chartModal.setAttribute("aria-hidden", "false");
+    const firstInput = appEls.chartForm.elements.namedItem("chartType");
+    if (firstInput) {
+      firstInput.focus();
+    }
+  }
+
+  function closeChartModal() {
+    appEls.chartModal.classList.add("hidden");
+    appEls.chartModal.setAttribute("aria-hidden", "true");
+  }
+
+  function parseCommaSeparatedValues(value) {
+    return String(value || "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
   }
 
   function renderStrokePath(points) {
@@ -288,6 +644,9 @@
     switch (item.kind) {
       case "stroke":
         renderStrokePath(item.points || []);
+        break;
+      case "chart":
+        drawChartItem(item);
         break;
       case "line":
       case "arrow":
@@ -346,6 +705,7 @@
     const rect = appEls.canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, rect.width, rect.height);
     state.boardItems.forEach((item) => drawItem(item));
+    drawSelectionOutline(getSelectedItem());
 
     if (state.drawing && state.draftPoints.length) {
       drawItem(buildDraftItem(), true);
@@ -456,7 +816,7 @@
       case "arrow":
         return { kind: state.currentTool, start, end, color, width };
       case "eraser":
-        return { kind: "stroke", points: state.draftPoints, color: "#fffdf9", width: width * 2 };
+        return { kind: "stroke", points: state.draftPoints, color: getBoardSurfaceColor(), width: width * 2 };
       default:
         return { kind: "stroke", points: state.draftPoints, color, width };
     }
@@ -504,19 +864,36 @@
           state.session = message.payload.session;
           state.currentMember = message.payload.currentMember;
           state.boardItems = state.session.boardItems || [];
+          state.selectedItemId = null;
           enterWorkspace();
           render();
           break;
         case "board:itemAdded":
           state.boardItems.push(message.payload);
+          updatePermissionsUi();
           render();
           break;
         case "board:itemRemoved":
+          clearChartCacheForItem(message.payload.itemId);
           state.boardItems = state.boardItems.filter((item) => item.id !== message.payload.itemId);
+          if (state.selectedItemId === message.payload.itemId) {
+            state.selectedItemId = null;
+          }
+          updatePermissionsUi();
+          render();
+          break;
+        case "board:itemUpdated":
+          clearChartCacheForItem(message.payload.id);
+          state.boardItems = state.boardItems.map((item) => (item.id === message.payload.id ? message.payload : item));
+          updatePermissionsUi();
           render();
           break;
         case "board:cleared":
           state.boardItems = [];
+          state.selectedItemId = null;
+          chartImageCache.clear();
+          chartRenderJobs.clear();
+          updatePermissionsUi();
           render();
           break;
         case "members:update":
@@ -562,6 +939,7 @@
     appEls.currentRole.textContent = `Role: ${state.currentMember.role}`;
     appEls.clearBtn.disabled = !can("clearBoard");
     appEls.undoBtn.disabled = !can("erase");
+    appEls.deleteSelectionBtn.disabled = !canRemoveItem(getSelectedItem());
     renderPermissionsLegend();
   }
 
@@ -631,6 +1009,16 @@
         if (nearPoint) {
           return item;
         }
+      } else if (item.kind === "chart") {
+        const bounds = getChartBounds(item);
+        if (
+          point.x >= bounds.x &&
+          point.x <= bounds.x + bounds.width &&
+          point.y >= bounds.y &&
+          point.y <= bounds.y + bounds.height
+        ) {
+          return item;
+        }
       } else {
         const minX = Math.min(item.start.x, item.end.x) - 10;
         const maxX = Math.max(item.start.x, item.end.x) + 10;
@@ -645,6 +1033,29 @@
   }
 
   appEls.canvas.addEventListener("pointerdown", (event) => {
+    if (state.currentTool === "select") {
+      state.drawing = false;
+      state.draftPoints = [];
+      const point = getPoint(event);
+      const hit = hitTest(point);
+      state.selectedItemId = hit?.id || null;
+      if (hit && canMoveItem(hit)) {
+        const bounds = itemBounds(hit);
+        state.dragState = {
+          itemId: hit.id,
+          startPoint: point,
+          originalItem: hit,
+          bounds
+        };
+        appEls.canvas.setPointerCapture(event.pointerId);
+      } else {
+        state.dragState = null;
+      }
+      updatePermissionsUi();
+      render();
+      return;
+    }
+
     if (!can("draw") && state.currentTool !== "eraser") {
       setStatus("Your role does not allow drawing", true);
       return;
@@ -663,6 +1074,8 @@
       return;
     }
 
+    state.selectedItemId = null;
+    updatePermissionsUi();
     state.drawing = true;
     state.draftPoints = [point];
     appEls.canvas.setPointerCapture(event.pointerId);
@@ -670,6 +1083,16 @@
   });
 
   appEls.canvas.addEventListener("pointermove", (event) => {
+    if (state.currentTool === "select" && state.dragState) {
+      const point = getPoint(event);
+      const deltaX = point.x - state.dragState.startPoint.x;
+      const deltaY = point.y - state.dragState.startPoint.y;
+      state.boardItems = state.boardItems.map((item) =>
+        item.id === state.dragState.itemId ? buildMovedItem(state.dragState.originalItem, deltaX, deltaY) : item
+      );
+      render();
+      return;
+    }
     if (!state.drawing) {
       return;
     }
@@ -678,6 +1101,17 @@
   });
 
   function finishDraw() {
+    if (state.currentTool === "select" && state.dragState) {
+      const movedItem = getSelectedItem();
+      if (movedItem) {
+        sendMessage("board:updateItem", {
+          itemId: movedItem.id,
+          updates: itemUpdatePayload(movedItem)
+        });
+      }
+      state.dragState = null;
+      return;
+    }
     if (!state.drawing || !state.draftPoints.length) {
       return;
     }
@@ -691,6 +1125,9 @@
   appEls.canvas.addEventListener("pointercancel", finishDraw);
 
   appEls.clearBtn.addEventListener("click", () => sendMessage("board:clear", {}));
+  appEls.deleteSelectionBtn.addEventListener("click", () => {
+    deleteSelectedItem();
+  });
   appEls.undoBtn.addEventListener("click", () => {
     if (!can("erase")) {
       return;
@@ -699,6 +1136,56 @@
     if (latestOwnItem) {
       sendMessage("board:removeItem", { itemId: latestOwnItem.id });
     }
+  });
+
+  appEls.addChartBtn.addEventListener("click", () => {
+    if (!can("draw")) {
+      setStatus("Your role does not allow drawing", true);
+      return;
+    }
+    openChartModal();
+  });
+
+  appEls.closeChartModalBtn.addEventListener("click", closeChartModal);
+  appEls.chartModal.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLElement && event.target.dataset.closeChartModal === "true") {
+      closeChartModal();
+    }
+  });
+
+  appEls.chartForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!can("draw")) {
+      setStatus("Your role does not allow drawing", true);
+      return;
+    }
+
+    const formData = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const labels = parseCommaSeparatedValues(formData.labels);
+    const values = parseCommaSeparatedValues(formData.values).map((entry) => Number(entry));
+
+    if (!labels.length || labels.length !== values.length || values.some((value) => Number.isNaN(value))) {
+      setStatus("Charts need matching comma-separated labels and numeric values.", true);
+      return;
+    }
+
+    const boardRect = appEls.canvas.getBoundingClientRect();
+    sendMessage("board:addItem", {
+      kind: "chart",
+      chartType: String(formData.chartType || "bar"),
+      title: String(formData.title || "").trim(),
+      datasetLabel: String(formData.datasetLabel || "").trim(),
+      labels,
+      values,
+      x: Math.max(32, boardRect.width / 2 - 160),
+      y: Math.max(32, boardRect.height / 2 - 110),
+      width: Math.min(360, boardRect.width - 64),
+      height: 220
+    });
+
+    event.currentTarget.reset();
+    event.currentTarget.elements.namedItem("chartType").value = "bar";
+    closeChartModal();
   });
 
   appEls.createForm.addEventListener("submit", async (event) => {
@@ -761,6 +1248,7 @@
     if (!sessionId) {
       return;
     }
+    switchAuthTab("join");
     const sessionIdInput = appEls.joinForm.elements.namedItem("sessionId");
     const passwordInput = appEls.joinForm.elements.namedItem("password");
     if (sessionIdInput) {
@@ -775,6 +1263,40 @@
   appEls.shapeAssistToggle.addEventListener("click", () => {
     state.shapeAssistEnabled = !state.shapeAssistEnabled;
     syncShapeAssistToggle();
+  });
+
+  appEls.authTabs.forEach((button) => {
+    button.addEventListener("click", () => {
+      switchAuthTab(button.dataset.authTab);
+    });
+  });
+
+  appEls.authTabTriggers.forEach((button) => {
+    button.addEventListener("click", () => {
+      switchAuthTab(button.dataset.authTabTrigger);
+      const targetForm = button.dataset.authTabTrigger === "join" ? appEls.joinForm : appEls.createForm;
+      targetForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      const firstInput = targetForm.querySelector("input");
+      if (firstInput) {
+        firstInput.focus();
+      }
+    });
+  });
+
+  window.addEventListener("keydown", (event) => {
+    const target = event.target;
+    const typingIntoField =
+      target instanceof HTMLElement &&
+      (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
+
+    if (event.key === "Escape" && !appEls.chartModal.classList.contains("hidden")) {
+      closeChartModal();
+      return;
+    }
+
+    if (!typingIntoField && (event.key === "Delete" || event.key === "Backspace")) {
+      deleteSelectedItem();
+    }
   });
 
   appEls.themeToggle.addEventListener("click", () => {
