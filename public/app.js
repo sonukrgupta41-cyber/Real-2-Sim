@@ -11,6 +11,7 @@
     shapeAssistEnabled: true,
     theme: localStorage.getItem("livecollab-theme") || "light",
     boardItems: [],
+    chatMessages: [],
     draftPoints: [],
     drawing: false,
     dragState: null,
@@ -21,6 +22,7 @@
   const tools = [
     { id: "select", icon: "⬚", label: "Select" },
     { id: "pen", icon: "✎", label: "Pen" },
+    { id: "bucket", icon: "▣", label: "Fill" },
     { id: "line", icon: "／", label: "Line" },
     { id: "rectangle", icon: "▭", label: "Rectangle" },
     { id: "ellipse", icon: "◯", label: "Ellipse" },
@@ -54,6 +56,9 @@
     clearBtn: document.getElementById("clearBtn"),
     undoBtn: document.getElementById("undoBtn"),
     membersList: document.getElementById("membersList"),
+    chatMessages: document.getElementById("chatMessages"),
+    chatForm: document.getElementById("chatForm"),
+    chatInput: document.getElementById("chatInput"),
     permissionsLegend: document.getElementById("permissionsLegend"),
     sessionTitle: document.getElementById("sessionTitle"),
     sessionIdText: document.getElementById("sessionIdText"),
@@ -141,6 +146,38 @@
       chip.textContent = name;
       container.appendChild(chip);
     });
+  }
+
+  function renderChatMessages() {
+    appEls.chatMessages.innerHTML = "";
+    state.chatMessages.forEach((message) => {
+      const article = document.createElement("article");
+      article.className = "chat-message";
+      if (message.memberId === state.currentMember?.id) {
+        article.classList.add("own");
+      }
+
+      const meta = document.createElement("div");
+      meta.className = "chat-message-meta";
+      meta.textContent = `${message.memberName} · ${new Date(message.createdAt).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit"
+      })}`;
+
+      const body = document.createElement("p");
+      body.textContent = message.text;
+
+      article.appendChild(meta);
+      article.appendChild(body);
+      appEls.chatMessages.appendChild(article);
+    });
+
+    appEls.chatMessages.scrollTop = appEls.chatMessages.scrollHeight;
+  }
+
+  function resizeChatInput() {
+    appEls.chatInput.style.height = "auto";
+    appEls.chatInput.style.height = `${Math.min(appEls.chatInput.scrollHeight, 140)}px`;
   }
 
   function renderPermissionsLegend() {
@@ -374,6 +411,21 @@
     return state.currentMember?.role === "admin" || item.authorId === state.currentMember?.id;
   }
 
+  function isClosedStroke(item) {
+    const points = item.points || [];
+    if (points.length < 4) {
+      return false;
+    }
+    return distance(points[0], points[points.length - 1]) < 22;
+  }
+
+  function canFillItem(item) {
+    if (!item || !canMoveItem(item)) {
+      return false;
+    }
+    return item.kind === "rectangle" || item.kind === "ellipse" || item.kind === "chart" || (item.kind === "stroke" && isClosedStroke(item));
+  }
+
   function deleteSelectedItem() {
     const selectedItem = getSelectedItem();
     if (!canRemoveItem(selectedItem)) {
@@ -449,6 +501,22 @@
     return { start: item.start, end: item.end };
   }
 
+  function fillItem(item, fillColor) {
+    if (!canFillItem(item)) {
+      return;
+    }
+
+    const updates =
+      item.kind === "chart"
+        ? { fillColor }
+        : { fillColor };
+
+    sendMessage("board:updateItem", {
+      itemId: item.id,
+      updates
+    });
+  }
+
   function drawChartPlaceholder(item) {
     const bounds = getChartBounds(item);
     const palette = getChartPalette();
@@ -491,12 +559,16 @@
             data: item.values || [],
             backgroundColor:
               item.chartType === "line"
-                ? palette.fill
-                : (item.values || []).map((_, index) => palette.series[index % palette.series.length]),
+                ? item.fillColor || palette.fill
+                : item.chartType === "bar"
+                  ? item.fillColor || palette.series[0]
+                  : (item.values || []).map((_, index) => item.fillColor || palette.series[index % palette.series.length]),
             borderColor:
               item.chartType === "line"
                 ? palette.accent
-                : (item.values || []).map((_, index) => palette.series[index % palette.series.length]),
+                : item.chartType === "bar"
+                  ? item.color || palette.accent
+                  : (item.values || []).map((_, index) => item.color || palette.series[index % palette.series.length]),
             borderWidth: 2,
             tension: 0.32,
             fill: item.chartType === "line",
@@ -643,6 +715,16 @@
 
     switch (item.kind) {
       case "stroke":
+        if (item.fillColor && isClosedStroke(item)) {
+          ctx.fillStyle = item.fillColor;
+          ctx.beginPath();
+          ctx.moveTo(item.points[0].x, item.points[0].y);
+          for (let index = 1; index < item.points.length; index += 1) {
+            ctx.lineTo(item.points[index].x, item.points[index].y);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
         renderStrokePath(item.points || []);
         break;
       case "chart":
@@ -659,6 +741,15 @@
         }
         break;
       case "rectangle":
+        if (item.fillColor) {
+          ctx.fillStyle = item.fillColor;
+          ctx.fillRect(
+            Math.min(item.start.x, item.end.x),
+            Math.min(item.start.y, item.end.y),
+            Math.abs(item.end.x - item.start.x),
+            Math.abs(item.end.y - item.start.y)
+          );
+        }
         ctx.strokeRect(
           Math.min(item.start.x, item.end.x),
           Math.min(item.start.y, item.end.y),
@@ -667,6 +758,20 @@
         );
         break;
       case "ellipse":
+        if (item.fillColor) {
+          ctx.fillStyle = item.fillColor;
+          ctx.beginPath();
+          ctx.ellipse(
+            (item.start.x + item.end.x) / 2,
+            (item.start.y + item.end.y) / 2,
+            Math.abs(item.end.x - item.start.x) / 2,
+            Math.abs(item.end.y - item.start.y) / 2,
+            0,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
         ctx.beginPath();
         ctx.ellipse(
           (item.start.x + item.end.x) / 2,
@@ -864,6 +969,7 @@
           state.session = message.payload.session;
           state.currentMember = message.payload.currentMember;
           state.boardItems = state.session.boardItems || [];
+          state.chatMessages = state.session.chatMessages || [];
           state.selectedItemId = null;
           enterWorkspace();
           render();
@@ -905,6 +1011,13 @@
           renderMembers();
           updatePermissionsUi();
           break;
+        case "chat:newMessage":
+          state.chatMessages.push(message.payload);
+          if (state.chatMessages.length > 100) {
+            state.chatMessages.shift();
+          }
+          renderChatMessages();
+          break;
         case "member:kicked":
           alert(message.payload.message);
           window.location.reload();
@@ -931,6 +1044,7 @@
     appEls.shareLinkInput.value = buildShareLink(state.session.id);
     window.history.replaceState({}, "", `?sessionId=${encodeURIComponent(state.session.id)}`);
     renderMembers();
+    renderChatMessages();
     updatePermissionsUi();
     resizeCanvas();
   }
@@ -1053,6 +1167,16 @@
       }
       updatePermissionsUi();
       render();
+      return;
+    }
+
+    if (state.currentTool === "bucket") {
+      const hit = hitTest(getPoint(event));
+      if (hit && canFillItem(hit)) {
+        fillItem(hit, state.currentColor);
+      } else {
+        setStatus("Bucket fill works on bounded shapes and closed strokes.", true);
+      }
       return;
     }
 
@@ -1243,6 +1367,20 @@
     }
   });
 
+  appEls.chatForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const text = String(appEls.chatInput.value || "").trim();
+    if (!text) {
+      return;
+    }
+    sendMessage("chat:send", { text });
+    appEls.chatInput.value = "";
+    resizeChatInput();
+    appEls.chatInput.focus();
+  });
+
+  appEls.chatInput.addEventListener("input", resizeChatInput);
+
   (function hydrateJoinFormFromUrl() {
     const sessionId = new URLSearchParams(window.location.search).get("sessionId");
     if (!sessionId) {
@@ -1312,5 +1450,6 @@
   initCustomColorPicker();
   buildWidthButtons();
   syncShapeAssistToggle();
+  resizeChatInput();
   resizeCanvas();
 })();

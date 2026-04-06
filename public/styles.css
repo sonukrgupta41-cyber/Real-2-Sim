@@ -102,6 +102,7 @@ body[data-theme="dark"] {
 
 button,
 input,
+textarea,
 select {
   font: inherit;
 }
@@ -438,6 +439,7 @@ label {
 }
 
 input,
+textarea,
 select,
 button {
   border-radius: 14px;
@@ -473,6 +475,7 @@ button:hover,
 }
 
 input:focus,
+textarea:focus,
 select:focus,
 button:focus,
 .hero-link:focus {
@@ -854,6 +857,62 @@ body[data-theme="dark"] .pickr .pcr-button {
 .member .info {
   display: grid;
   gap: 8px;
+}
+
+.chat-panel {
+  display: grid;
+  gap: 12px;
+  min-height: 280px;
+}
+
+.chat-head h3 {
+  margin: 0;
+}
+
+.chat-messages {
+  min-height: 180px;
+  max-height: 320px;
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.chat-message {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+}
+
+.chat-message.own {
+  background: var(--accent-soft);
+  border-color: rgba(203, 75, 22, 0.22);
+}
+
+.chat-message-meta {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.chat-message p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.chat-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 0;
+}
+
+.chat-form textarea {
+  min-height: 46px;
+  max-height: 140px;
+  resize: none;
+  overflow-y: auto;
 }
 
 .role-actions button {
